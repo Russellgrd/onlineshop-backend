@@ -1,5 +1,6 @@
 const http = require('http');
 const mysql = require('mysql');
+const url = require('url');
 
 const db = mysql.createConnection({
     host:'localhost',
@@ -29,7 +30,10 @@ const server = http.createServer((req, res) => {
         return;
       }
       if (['GET', 'POST'].indexOf(req.method) > -1) {
-        if(req.url === '/getproducts')
+        let queryPath = url.parse(req.url, true);
+        console.log('querypath is ', queryPath);
+
+        if(req.url === '/getproducts') {
         db.query('SELECT * FROM PRODUCTS', (err, data) => {
             if(err) {
                 res.statusCode = 400;
@@ -39,7 +43,17 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify(data));
             }
         })
+        return;
+        }
+              
+      if(queryPath.pathname == '/addtobasket') {
+        let id = queryPath.path.split('?')[1].split('=')[1];
+        console.log('id is', id);
+        
       }
+      }
+
+
 });
 
 const PORT = process.env.PORT || 3000;
