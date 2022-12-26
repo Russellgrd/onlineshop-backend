@@ -48,15 +48,27 @@ const server = http.createServer((req, res) => {
               
       if(queryPath.pathname == '/addtobasket') {
         let id = queryPath.path.split('?')[1].split('=')[1];
-        console.log('id is', id);
-        
+        let validId;
+        id > 1 ? validId = true : false;
+        if(validId) {
+            let sqlQuery = `SELECT * FROM PRODUCTS WHERE ID=${id}`;
+            db.query(sqlQuery, (err, data) => {
+                if(err) {
+                    res.statusCode = 400;
+                    res.end(err.message);
+                } else {
+                    res.writeHead(200, headers);
+                    res.end(JSON.stringify(data));
+                }
+            })
+        }
       }
       }
 
 
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, () => {
     console.log('listening on port ' + PORT);
