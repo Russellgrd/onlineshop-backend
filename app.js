@@ -1,6 +1,13 @@
-const http = require('http');
+if(process.env.NODE_ENV !== 'production'){
+    require('dotenv').config();
+}
+const express = require('express');
+const bodyParser = require('body-parser');
 const mysql = require('mysql');
-const url = require('url');
+const cors = require('cors');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_TEST);
+const YOUR_DOMAIN = 'http://localhost:3000';
+const app = express();
 
 const db = mysql.createConnection({
     host:'localhost',
@@ -16,61 +23,60 @@ db.connect((err) => {
     console.log('connected to your mySql database');
 })
 
-const server = http.createServer((req, res) => {
+const PORT = process.env.PORT || 4242;
 
-    const headers = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'OPTIONS, POST, GET',
-        'Access-Control-Max-Age': 2592000, // 30 days
-        /** add other headers as per requirement */
-      };
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204, headers);
-        res.end();
-        return;
-      }
-      if (['GET', 'POST'].indexOf(req.method) > -1) {
-        let queryPath = url.parse(req.url, true);
-        console.log('querypath is ', queryPath);
+app.use(cors({
+    origin:"*"
+}));
+app.use(bodyParser.urlencoded({
+    extended: true
+  }));
+app.use(express.static('public'));
+app.use(bodyParser.json())
 
-        if(req.url === '/getproducts') {
-        db.query('SELECT * FROM PRODUCTS', (err, data) => {
+
+app.get('/getproducts', (req, res) => {
+        console.log(req.body);
+        let sqlQuery = `SELECT * FROM PRODUCTS`
+        db.query(sqlQuery, (err, data) => {
             if(err) {
                 res.statusCode = 400;
-                res.end(err.message);
+                res.send(err.message);
             } else {
-                res.writeHead(200, headers);
-                res.end(JSON.stringify(data));
+                res.statusCode = 200;
+                res.json(data);
             }
         })
-        return;
+})
+
+
+
+    app.post('/create-checkout-session', async (req, res) => {
+        console.log('hit this checkout sessions block');
+        console.log(req.body);
+        let data = {
+            success:"successfully purchased"
         }
-              
-      if(queryPath.pathname == '/addtobasket') {
-        let id = queryPath.path.split('?')[1].split('=')[1];
-        let validId;
-        id > 1 ? validId = true : false;
-        if(validId) {
-            let sqlQuery = `SELECT * FROM PRODUCTS WHERE ID=${id}`;
-            db.query(sqlQuery, (err, data) => {
-                if(err) {
-                    res.statusCode = 400;
-                    res.end(err.message);
-                } else {
-                    res.writeHead(200, headers);
-                    res.end(JSON.stringify(data));
-                }
-            })
-        }
-      }
-      }
+        res.json({data});
+
+        // const session = await stripe.checkout.sessions.create({
+        //   line_items: [
+        //     {
+        //       // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
+        //       price: '{{PRICE_ID}}',
+        //       quantity: 1,
+        //     },
+        //   ],
+        //   mode: 'payment',
+        //   success_url: `${YOUR_DOMAIN}?success=true`,
+        //   cancel_url: `${YOUR_DOMAIN}?canceled=true`,
+        // });
+      
+        // res.redirect(303, session.url);
+      });
 
 
-});
 
-const PORT = process.env.PORT || 3001;
-
-server.listen(PORT, () => {
-    console.log('listening on port ' + PORT);
-});
-
+app.listen(PORT, () => {
+    console.log('listening on ' + PORT);
+})
