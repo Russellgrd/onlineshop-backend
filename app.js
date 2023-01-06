@@ -2,10 +2,13 @@ if(process.env.NODE_ENV !== 'production'){
     require('dotenv').config();
 }
 const express = require('express');
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 const bodyParser = require('body-parser');
 const mysql = require('mysql');
 const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_TEST);
+const moment = require('moment');
 const YOUR_DOMAIN = 'http://localhost:3000';
 const app = express();
 
@@ -33,6 +36,7 @@ app.use(bodyParser.urlencoded({
   }));
 app.use(express.static('public'));
 app.use(bodyParser.json())
+app.use(express.json());
 
 
 app.get('/getproducts', (req, res) => {
@@ -74,6 +78,53 @@ app.get('/getproducts', (req, res) => {
       
         // res.redirect(303, session.url);
       });
+
+    app.post('/createnewuser',(req, res) => {
+
+        console.log(req.body);
+        db.query('SELECT * FROM USERS WHERE email = ?',[req.body.email], (err, data) => {
+            if(err) {
+                console.log('hit error block')
+                res.writeHead(503, {
+                    'Content-Type:':'application/json'
+                });
+                res.json({"server error":err.message});
+                return;
+            }
+            if(data.length >= 1) {
+                console.log('hit normal block');
+                console.log('array item is',data[0]);
+                res.set('Content-Type', 'application/json');
+                res.json({"conflict":"username already exists"});
+                return;
+            };
+
+            bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+                if(err) {
+                    console.log('hit 2nd error block')
+                    res.writeHead(503, {
+                        'Content-Type:':'application/json'
+                    });
+                    res.json({"server error":err.message});
+                    return;
+                }
+                var sql = `INSERT INTO USERS (firstname,lastname, email, datejoined, hashedpassword) VALUES ('${req.body.firstname}','${req.body.lastname}','${req.body.email}','${moment().format('YYYY-DD-MM')}','${hash}');`;
+                console.log(sql);
+                db.query(sql, (err, data) => {
+                    if(err){
+                        console.log('error');
+                        console.log(err);
+                    } else {
+                        console.log(data);
+                        res.json({"message":"user successfully created"});
+                    }
+                }) 
+            });
+        
+        })
+    })
+
+    
 
 
 
