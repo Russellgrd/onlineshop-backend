@@ -9,6 +9,8 @@ const mysql = require('mysql');
 const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_TEST);
 const moment = require('moment');
+const jwt = require('jsonwebtoken');
+const res = require('express/lib/response');
 const YOUR_DOMAIN = 'http://localhost:3000';
 const app = express();
 
@@ -55,7 +57,7 @@ app.get('/getproducts', (req, res) => {
 
 
 
-    app.post('/create-checkout-session', async (req, res) => {
+    app.post('/create-checkout-session',  async (req, res) => {
         console.log('hit this checkout sessions block');
         console.log(req.body);
         let data = {
@@ -80,8 +82,6 @@ app.get('/getproducts', (req, res) => {
       });
 
     app.post('/createnewuser',(req, res) => {
-
-        console.log(req.body);
         db.query('SELECT * FROM USERS WHERE email = ?',[req.body.email], (err, data) => {
             if(err) {
                 console.log('hit error block')
@@ -124,9 +124,69 @@ app.get('/getproducts', (req, res) => {
         })
     })
 
-    
+    app.post('/userlogin', (req, res) => {
+        let { email, password } = req.body;
+        db.query('SELECT * FROM USERS WHERE email = ?',[email],async (err, data) => {
+            if(err) {
+                console.log('hit error block')
+                console.log(err);
+                res.setHeader('statusCode',503);
+                res.setHeader('Content-Type', 'application/json');  
+                res.json({"server error":err.message});
+            } else {
+                const match = await bcrypt.compare(password, data[0].hashedpassword);
+                if(match) {
+                    let token = jwt.sign({email}, process.env.JWT_SECRET);
+                    res.setHeader('statusCode',200);
+                    res.setHeader('Content-Type','application/json');
+                    res.json({"message":"successful","jwtToken":token, email:email});
+                }
+            }
+        })
+     })
+
+     app.get('/config', (req, res) => {
+        console.log('req received');
+        res.send({
+            publishableKey:process.env.STRIPE_PUBLISHABLE_KEY
+        });
+     });
 
 
+     app.post('/create-payment-intent', async (req, res) => {
+       
+        try {
+            const paymentIntent = await stripe.paymentIntents.create({
+                currency:'gbp',
+                amount:100,
+                automatic_payment_methods:{
+                    enabled:true
+                }
+            });
+            res.send({clientSecret: paymentIntent.client_secret})
+        } catch(err) {
+            
+            return res.status(400).send({
+                error:{
+                    message: err.message
+                }
+            })
+        }
+
+
+     })
+            
+
+    function authenticateToken (req, res, next) {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader &&  authHeader.split(' ')[1];
+        if(token == null) return res.sendStatus(401);
+        jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+            if(err) return res.sendStatus(403);
+            req.user = user;
+            next();
+        });
+    }
 
 app.listen(PORT, () => {
     console.log('listening on ' + PORT);
