@@ -108,7 +108,7 @@ app.get('/getproducts', (req, res) => {
                     res.json({"server error":err.message});
                     return;
                 }
-                var sql = `INSERT INTO USERS (firstname,lastname, email, datejoined, hashedpassword) VALUES ('${req.body.firstname}','${req.body.lastname}','${req.body.email}','${moment().format('YYYY-DD-MM')}','${hash}');`;
+                var sql = `INSERT INTO USERS (firstname,lastname, email, datejoined, hashedpassword) VALUES ('${req.body.firstname}','${req.body.lastname}','${req.body.email}','${moment().format('YYYY-MM-DD')}','${hash}');`;
                 console.log(sql);
                 db.query(sql, (err, data) => {
                     if(err){
@@ -154,11 +154,14 @@ app.get('/getproducts', (req, res) => {
 
 
      app.post('/create-payment-intent', async (req, res) => {
-       
+        let { userCartDetails } = req.body;
+        console.log('user cart details are', userCartDetails);
+        let payAmount = Number(userCartDetails.totalCost + "00");
+        console.log('pay amount is',payAmount)
         try {
             const paymentIntent = await stripe.paymentIntents.create({
-                currency:'gbp',
-                amount:100,
+                currency:'gbp', 
+                amount:payAmount,
                 automatic_payment_methods:{
                     enabled:true
                 }
