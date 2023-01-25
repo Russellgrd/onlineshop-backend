@@ -1,16 +1,17 @@
 if(process.env.NODE_ENV !== 'production'){
     require('dotenv').config();
 }
+
 const express = require('express');
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
+const uuid = require('uuid').v4
 const bodyParser = require('body-parser');
 const mysql = require('mysql');
 const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_TEST);
 const moment = require('moment');
 const jwt = require('jsonwebtoken');
-const res = require('express/lib/response');
 const YOUR_DOMAIN = 'http://localhost:3000';
 const app = express();
 
@@ -40,7 +41,6 @@ app.use(express.static('public'));
 app.use(bodyParser.json())
 app.use(express.json());
 
-
 app.get('/getproducts', (req, res) => {
         console.log(req.body);
         let sqlQuery = `SELECT * FROM PRODUCTS`
@@ -55,31 +55,6 @@ app.get('/getproducts', (req, res) => {
         })
 })
 
-
-
-    app.post('/create-checkout-session',  async (req, res) => {
-        console.log('hit this checkout sessions block');
-        console.log(req.body);
-        let data = {
-            success:"successfully purchased"
-        }
-        res.json({data});
-
-        // const session = await stripe.checkout.sessions.create({
-        //   line_items: [
-        //     {
-        //       // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
-        //       price: '{{PRICE_ID}}',
-        //       quantity: 1,
-        //     },
-        //   ],
-        //   mode: 'payment',
-        //   success_url: `${YOUR_DOMAIN}?success=true`,
-        //   cancel_url: `${YOUR_DOMAIN}?canceled=true`,
-        // });
-      
-        // res.redirect(303, session.url);
-      });
 
     app.post('/createnewuser',(req, res) => {
         db.query('SELECT * FROM USERS WHERE email = ?',[req.body.email], (err, data) => {
@@ -146,41 +121,90 @@ app.get('/getproducts', (req, res) => {
      })
 
      app.get('/config', (req, res) => {
-        console.log('req received');
         res.send({
-            publishableKey:process.env.STRIPE_PUBLISHABLE_KEY
+          publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
         });
-     });
+      });
+
+    app.post('/payment', (req, res) => {
+        let { product, token  } = req.body;
+        console.log('PRODUCT ', product);
+        console.log('TOKEN ',token );
+        const idempotencyKey = uuid();
+        return stripe.customers.create({
+            email:token.email,
+            source:token.id,
+
+        })
+        .then(customer => {
+            stripe.charges.create({
+                amount:product.price,
+                currency:'eur',
+                customer:customer.id,
+                receipt_email: token.email,
+                description: product.name,
+                shipping: {
+                    name:token.card.name,
+                    address: {
+                        country:token.card.address_country
+                    }
+                }
+            }, idempotencyKey)
+        })
+        .catch((err) => {
+            console.log('error is', err);
+        })
+
+
+        })
+
+    const calculateOrderAmount = (items) => {
+        // Replace this constant with a calculation of the order's amount
+        // Calculate the order total on the server to prevent
+        // people from directly manipulating the amount on the client
+        return 1400;
+        };
+
+
+
+    app.post('/create-checkout-session', async (req, res) => {
+
+        const session = await stripe.checkout.sessions.create({
+            line_items: [
+            {
+                // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
+                price: 1999,
+                quantity: 1,
+            },
+            ],
+            mode: 'payment',
+            success_url: ``,
+            cancel_url: ``,
+        });
+        
+        res.redirect(303, session.url);
+        });
 
 
      app.post('/create-payment-intent', async (req, res) => {
-        let { userCartDetails } = req.body;
-        console.log('user cart details are', userCartDetails);
-        let payAmount = Number(userCartDetails.totalCost + "00");
-        console.log('pay amount is',payAmount)
-        try {
-            const paymentIntent = await stripe.paymentIntents.create({
-                currency:'gbp', 
-                amount:payAmount,
-                automatic_payment_methods:{
-                    enabled:true
-                }
-            });
-            res.send({clientSecret: paymentIntent.client_secret})
-        } catch(err) {
-            
-            return res.status(400).send({
-                error:{
-                    message: err.message
-                }
-            })
-        }
 
+        const { items, amount } = req.body;
+        console.log('ITEMS ', items);
+        console.log('AMOUNT ', amount);
 
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: 1999,
+            currency: "eur",
+            automatic_payment_methods: {
+              enabled: true,
+            },
+          });
+          res.send({
+            clientSecret: paymentIntent.client_secret,
+          });
      })
-            
 
-    function authenticateToken (req, res, next) {
+     function authenticateToken (req, res, next) {
         const authHeader = req.headers['authorization'];
         const token = authHeader &&  authHeader.split(' ')[1];
         if(token == null) return res.sendStatus(401);
@@ -190,6 +214,8 @@ app.get('/getproducts', (req, res) => {
             next();
         });
     }
+
+
 
 app.listen(PORT, () => {
     console.log('listening on ' + PORT);
