@@ -55,6 +55,21 @@ app.get('/getproducts', (req, res) => {
         })
 })
 
+    app.get('/item-description:id', (req, res) => {
+        let id = req.params.id;
+        console.log('ID IS ', id);
+        let sqlQuery = `SELECT * FROM PRODUCTS WHERE id=`+id;
+        db.query(sqlQuery, (err, data) => {
+            if(err) {
+                res.statusCode = 400;
+                res.send(err.message);
+            } else {
+                res.statusCode = 200;
+                res.json(data);
+            }
+        })
+    })
+
 
     app.post('/createnewuser',(req, res) => {
         db.query('SELECT * FROM USERS WHERE email = ?',[req.body.email], (err, data) => {
@@ -83,7 +98,7 @@ app.get('/getproducts', (req, res) => {
                     res.json({"server error":err.message});
                     return;
                 }
-                var sql = `INSERT INTO USERS (firstname,lastname, email, datejoined, hashedpassword) VALUES ('${req.body.firstname}','${req.body.lastname}','${req.body.email}','${moment().format('YYYY-MM-DD')}','${hash}');`;
+                let sql = `INSERT INTO USERS (firstname,lastname, email, datejoined, hashedpassword) VALUES ('${req.body.firstname}','${req.body.lastname}','${req.body.email}','${moment().format('YYYY-MM-DD')}','${hash}');`;
                 console.log(sql);
                 db.query(sql, (err, data) => {
                     if(err){
@@ -126,37 +141,6 @@ app.get('/getproducts', (req, res) => {
         });
       });
 
-    app.post('/payment', (req, res) => {
-        let { product, token  } = req.body;
-        console.log('PRODUCT ', product);
-        console.log('TOKEN ',token );
-        const idempotencyKey = uuid();
-        return stripe.customers.create({
-            email:token.email,
-            source:token.id,
-
-        })
-        .then(customer => {
-            stripe.charges.create({
-                amount:product.price,
-                currency:'eur',
-                customer:customer.id,
-                receipt_email: token.email,
-                description: product.name,
-                shipping: {
-                    name:token.card.name,
-                    address: {
-                        country:token.card.address_country
-                    }
-                }
-            }, idempotencyKey)
-        })
-        .catch((err) => {
-            console.log('error is', err);
-        })
-
-
-        })
 
     const calculateOrderAmount = (items) => {
         // Replace this constant with a calculation of the order's amount
@@ -167,33 +151,12 @@ app.get('/getproducts', (req, res) => {
 
 
 
-    app.post('/create-checkout-session', async (req, res) => {
-
-        const session = await stripe.checkout.sessions.create({
-            line_items: [
-            {
-                // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
-                price: 1999,
-                quantity: 1,
-            },
-            ],
-            mode: 'payment',
-            success_url: ``,
-            cancel_url: ``,
-        });
-        
-        res.redirect(303, session.url);
-        });
-
 
      app.post('/create-payment-intent', async (req, res) => {
-
         const { items, amount } = req.body;
-        console.log('ITEMS ', items);
-        console.log('AMOUNT ', amount);
-
+        console.log(items);
         const paymentIntent = await stripe.paymentIntents.create({
-            amount: 1999,
+            amount: amount * 100,
             currency: "eur",
             automatic_payment_methods: {
               enabled: true,
@@ -203,6 +166,29 @@ app.get('/getproducts', (req, res) => {
             clientSecret: paymentIntent.client_secret,
           });
      })
+
+     app.post('/purchasecomplete', (req, res) => {
+        console.log('BODY', req.body);
+
+        let items = req.body.items.map((item) => {
+            return [item.id, item.description];
+        });
+        let address = req.body.address;
+        let stringAddress = `${address.line1} ${address.line2} ${address.city} ${address.country} ${address.postal_code}`;
+        
+        let sql = `INSERT INTO ORDERS (order_id,username,date,amount, address, items) VALUES ('${req.body.orderId}','${req.body.username}','${moment().format('YYYY-MM-DD')}','${req.body.totalCost}','${stringAddress}','${JSON.stringify(items)}');`;
+        db.query(sql, (err, data) => {
+            if(err){
+                console.log('error', err);
+                res.status(500).json({err});
+            } else {
+                console.log(data);
+                res.json({"message":"payment successfully made"});
+            }
+        }) 
+     });
+
+
 
      function authenticateToken (req, res, next) {
         const authHeader = req.headers['authorization'];
