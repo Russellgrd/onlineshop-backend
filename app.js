@@ -169,13 +169,11 @@ app.get('/getproducts', (req, res) => {
 
      app.post('/purchasecomplete', (req, res) => {
         console.log('BODY', req.body);
-
         let items = req.body.items.map((item) => {
             return [item.id, item.description];
         });
         let address = req.body.address;
         let stringAddress = `${address.line1} ${address.line2} ${address.city} ${address.country} ${address.postal_code}`;
-        
         let sql = `INSERT INTO ORDERS (order_id,username,date,amount, address, items) VALUES ('${req.body.orderId}','${req.body.username}','${moment().format('YYYY-MM-DD')}','${req.body.totalCost}','${stringAddress}','${JSON.stringify(items)}');`;
         db.query(sql, (err, data) => {
             if(err){
