@@ -155,16 +155,21 @@ app.get('/getproducts', (req, res) => {
      app.post('/create-payment-intent', async (req, res) => {
         const { items, amount } = req.body;
         console.log(items);
-        const paymentIntent = await stripe.paymentIntents.create({
-            amount: amount * 100,
-            currency: "eur",
-            automatic_payment_methods: {
-              enabled: true,
-            },
-          });
-          res.send({
-            clientSecret: paymentIntent.client_secret,
-          });
+        try {
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount * 100,
+                currency: "eur",
+                automatic_payment_methods: {
+                  enabled: true,
+                },
+              });
+              res.send({
+                clientSecret: paymentIntent.client_secret,
+              });
+        } catch(err) {
+            res.status(400).send('error on stripe paymentIntents', err);
+        }
+
      })
 
      app.post('/purchasecomplete', (req, res) => {
